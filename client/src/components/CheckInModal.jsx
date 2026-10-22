@@ -83,3 +83,5 @@ export default function CheckInModal({
     </div>
   );
 }
+
+CheckInModal.displayName = 'CheckInModal';

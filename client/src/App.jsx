@@ -1,3 +1,4 @@
+import React, { Component, useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Link, Navigate, useLocation } from 'react-router-dom';
 import Auth from './pages/Auth.jsx';
 import Search from './pages/Search.jsx';
@@ -6,6 +7,55 @@ import BookingOutput from './pages/BookingOutput.jsx';
 import MyBookings from './pages/MyBookings.jsx';
 import Profile from './pages/Profile.jsx';
 import { logoutUser } from './firebase.js';
+
+// Debugging ErrorBoundary for React DevTools
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null, errorInfo: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    this.setState({ errorInfo });
+    // Log to console for React Developer Tools inspection
+    console.error('[React DevTools Debugger] Unhandled component error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-6 max-w-xl mx-auto my-12 bg-red-50 border-2 border-red-300 rounded-3xl text-slate-800 shadow-lg">
+          <div className="flex items-center gap-3 mb-3 text-red-600">
+            <span className="text-3xl">⚠️</span>
+            <h2 className="text-xl font-black">React Runtime Error Caught</h2>
+          </div>
+          <p className="text-xs text-red-700 font-semibold mb-3">
+            {this.state.error?.message || 'An unexpected rendering error occurred.'}
+          </p>
+          <details className="text-[11px] bg-white/80 p-3 rounded-xl border border-red-200 overflow-x-auto text-slate-700 font-mono mb-4">
+            <summary className="cursor-pointer font-bold text-red-800 mb-1">
+              Component Stack (for React DevTools)
+            </summary>
+            {this.state.errorInfo?.componentStack || this.state.error?.stack}
+          </details>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl cursor-pointer shadow-xs"
+          >
+            Reload Page
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+ErrorBoundary.displayName = 'ErrorBoundary';
 
 function NavigationBar({ user, logout }) {
   const location = useLocation();
@@ -187,13 +237,41 @@ function NavigationBar({ user, logout }) {
     </header>
   );
 }
+NavigationBar.displayName = 'NavigationBar';
 
 export default function App() {
-  const user = JSON.parse(localStorage.getItem('user') || 'null');
+  const [user, setUser] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('user') || 'null');
+    } catch {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    const handleAuthSync = () => {
+      try {
+        const stored = JSON.parse(localStorage.getItem('user') || 'null');
+        setUser(stored);
+      } catch {
+        setUser(null);
+      }
+    };
+    window.addEventListener('storage', handleAuthSync);
+    window.addEventListener('auth-change', handleAuthSync);
+    return () => {
+      window.removeEventListener('storage', handleAuthSync);
+      window.removeEventListener('auth-change', handleAuthSync);
+    };
+  }, []);
+
   const isHost = user?.role === 'host';
 
   const logout = async () => {
     await logoutUser();
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setUser(null);
     window.location.href = '/login';
   };
 
@@ -202,59 +280,71 @@ export default function App() {
       <NavigationBar user={user} logout={logout} />
 
       <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <Routes>
-          <Route path="/login" element={<Auth />} />
+        <ErrorBoundary>
+          <Routes>
+            <Route
+              path="/login"
+              element={
+                user ? (
+                  <Navigate to={isHost ? '/host' : '/'} replace />
+                ) : (
+                  <Auth />
+                )
+              }
+            />
 
-          {/* Find Parking: Accessible to Driver authenticated users */}
-          <Route
-            path="/"
-            element={
-              user ? (
-                isHost ? <Navigate to="/host" replace /> : <Search />
-              ) : (
-                <Navigate to="/login" replace />
-              )
-            }
-          />
+            {/* Find Parking: Accessible to Driver authenticated users */}
+            <Route
+              path="/"
+              element={
+                user ? (
+                  isHost ? <Navigate to="/host" replace /> : <Search />
+                ) : (
+                  <Navigate to="/login" replace />
+                )
+              }
+            />
 
-          {/* Host Dashboard: Accessible to Host authenticated users */}
-          <Route
-            path="/host"
-            element={
-              user ? (
-                isHost ? <Host /> : <Navigate to="/" replace />
-              ) : (
-                <Navigate to="/login?role=host" replace />
-              )
-            }
-          />
+            {/* Host Dashboard: Accessible to Host authenticated users */}
+            <Route
+              path="/host"
+              element={
+                user ? (
+                  isHost ? <Host /> : <Navigate to="/" replace />
+                ) : (
+                  <Navigate to="/login?role=host" replace />
+                )
+              }
+            />
 
-          {/* Booking Output Page: Accessible directly or via ID */}
-          <Route path="/booking/:id" element={<BookingOutput />} />
-          <Route path="/booking" element={<BookingOutput />} />
-          <Route path="/output" element={<BookingOutput />} />
+            {/* Booking Output Page: Accessible directly or via ID */}
+            <Route path="/booking/:id" element={<BookingOutput />} />
+            <Route path="/booking" element={<BookingOutput />} />
+            <Route path="/output" element={<BookingOutput />} />
 
-          {/* Driver My Bookings */}
-          <Route
-            path="/my-bookings"
-            element={
-              user ? (
-                isHost ? <Navigate to="/host" replace /> : <MyBookings />
-              ) : (
-                <Navigate to="/login" replace />
-              )
-            }
-          />
+            {/* Driver My Bookings */}
+            <Route
+              path="/my-bookings"
+              element={
+                user ? (
+                  isHost ? <Navigate to="/host" replace /> : <MyBookings />
+                ) : (
+                  <Navigate to="/login" replace />
+                )
+              }
+            />
 
-          {/* Driver & Host Profile & ID Verification */}
-          <Route
-            path="/profile"
-            element={user ? <Profile /> : <Navigate to="/login" replace />}
-          />
+            {/* Driver & Host Profile & ID Verification */}
+            <Route
+              path="/profile"
+              element={user ? <Profile /> : <Navigate to="/login" replace />}
+            />
 
-          <Route path="*" element={<Navigate to={isHost ? '/host' : '/'} replace />} />
-        </Routes>
+            <Route path="*" element={<Navigate to={isHost ? '/host' : '/'} replace />} />
+          </Routes>
+        </ErrorBoundary>
       </main>
     </BrowserRouter>
   );
 }
+App.displayName = 'App';

@@ -544,3 +544,5 @@ export default function BookingOutput() {
     </div>
   );
 }
+
+BookingOutput.displayName = 'BookingOutput';

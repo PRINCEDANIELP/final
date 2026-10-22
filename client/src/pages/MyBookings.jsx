@@ -279,3 +279,5 @@ export default function MyBookings() {
     </div>
   );
 }
+
+MyBookings.displayName = 'MyBookings';

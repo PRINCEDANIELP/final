@@ -1249,3 +1249,5 @@ export default function Search() {
     </div>
   );
 }
+
+Search.displayName = 'Search';

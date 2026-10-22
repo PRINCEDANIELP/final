@@ -134,3 +134,5 @@ export default function LightboxModal({
     </div>
   );
 }
+
+LightboxModal.displayName = 'LightboxModal';

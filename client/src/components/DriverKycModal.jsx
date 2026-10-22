@@ -215,3 +215,5 @@ export default function DriverKycModal({
     </div>
   );
 }
+
+DriverKycModal.displayName = 'DriverKycModal';

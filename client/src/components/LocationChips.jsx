@@ -57,3 +57,5 @@ export default function LocationChips({
     </div>
   );
 }
+
+LocationChips.displayName = 'LocationChips';

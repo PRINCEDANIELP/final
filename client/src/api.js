@@ -718,12 +718,26 @@ export async function api(path, { method = 'GET', body } = {}) {
     }
     // If backend replied with standard 4xx/5xx JSON error
     const errData = await res.json().catch(() => ({}));
-    if (res.status === 401 || res.status === 403 || res.status >= 500) {
-      console.warn(`[ParkShare] Backend status ${res.status}, using mock fallback for ${path}`);
-      return mockHandler(path, { method, body });
+
+    // Authentication endpoints must never silently fall back to mock data
+    if (path.startsWith('/auth/login') || path.startsWith('/auth/register') || path.startsWith('/auth/google')) {
+      throw new Error(errData.message || 'Authentication failed. Please check your credentials.');
     }
+
+    if (res.status === 401 || res.status === 403) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.dispatchEvent(new Event('auth-change'));
+      throw new Error(errData.message || 'Session expired or unauthorized. Please sign in.');
+    }
+
     if (res.status === 400 || res.status === 409) {
       throw new Error(errData.message || 'Request failed');
+    }
+
+    if (res.status >= 500) {
+      console.warn(`[ParkShare] Backend status ${res.status}, using mock fallback for ${path}`);
+      return mockHandler(path, { method, body });
     }
     // If 404 or other code, fallback to mock
     return mockHandler(path, { method, body });

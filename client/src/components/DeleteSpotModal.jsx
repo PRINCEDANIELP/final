@@ -54,3 +54,5 @@ export default function DeleteSpotModal({
     </div>
   );
 }
+
+DeleteSpotModal.displayName = 'DeleteSpotModal';

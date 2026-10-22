@@ -353,3 +353,5 @@ export default function EditSpotModal({
     </div>
   );
 }
+
+EditSpotModal.displayName = 'EditSpotModal';
