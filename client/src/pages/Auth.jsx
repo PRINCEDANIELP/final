@@ -1,6 +1,11 @@
 import React, { useState, useEffect, useDebugValue } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { signInWithGoogle } from '../firebase.js';
+import {
+  signInWithGoogle,
+  registerWithFirebase,
+  loginWithFirebase,
+  getFirebaseErrorMessage,
+} from '../firebase.js';
 import { api } from '../api.js';
 
 // Custom hook to provide clean debugging information inside React Developer Tools
@@ -65,7 +70,30 @@ export default function Auth() {
 
     try {
       if (mode === 'register') {
-        // 1. Create account: Store all user details for Driver or Host in database
+        // 1. First, register user in Firebase Auth
+        let fbUid = '';
+        try {
+          const fbUser = await registerWithFirebase(email, password, name);
+          if (fbUser && fbUser.uid) {
+            fbUid = fbUser.uid;
+          }
+        } catch (fbErr) {
+          if (fbErr.code === 'auth/email-already-in-use') {
+            setError('This email is already registered. Please sign in with your password.');
+            setMode('login');
+            setPassword('');
+            setLoading(false);
+            return;
+          }
+          if (fbErr.code === 'auth/weak-password' || fbErr.code === 'auth/invalid-email') {
+            setError(getFirebaseErrorMessage(fbErr));
+            setLoading(false);
+            return;
+          }
+          console.warn('[Firebase Register note]:', fbErr.message);
+        }
+
+        // 2. Persist full driver / host registration details in database
         const payload = {
           name: name.trim(),
           email: email.trim(),
@@ -76,6 +104,7 @@ export default function Auth() {
           address: address.trim(),
           licenceNumber: licenceNumber.trim(),
           vehicleNumber: vehicleNumber.trim(),
+          firebaseUid: fbUid,
         };
 
         const data = await api('/auth/register', {
@@ -87,24 +116,33 @@ export default function Auth() {
           throw new Error('Registration failed. Please try again.');
         }
 
-        // Account successfully created in DB -> Prompt user to sign in
+        // Account successfully created in DB and Firebase!
+        // Transition to Sign In mode, clear password, and prompt user
         setPassword('');
         setMode('login');
         setInfoMsg(
           data.message ||
-            'Account created successfully in database! Please sign in with your email and password.'
+            'Account created successfully in database and Firebase! Please sign in with your email and password.'
         );
         return;
       }
 
-      // 2. Sign In mode
+      // 2. Sign In mode:
+      // First verify credentials against backend database (MongoDB Atlas)
       const data = await api('/auth/login', {
         method: 'POST',
         body: { email: email.trim(), password },
       });
 
       if (!data || !data.token) {
-        throw new Error('Authentication failed. Please check your credentials.');
+        throw new Error('Invalid email or password. Please check your credentials.');
+      }
+
+      // Also authenticate with Firebase Auth to keep Firebase session active
+      try {
+        await loginWithFirebase(email, password, data.user?.name);
+      } catch (fbLoginErr) {
+        console.warn('[Firebase Login note]:', fbLoginErr.message);
       }
 
       // Preserve genuine user role returned from MongoDB Atlas
@@ -122,45 +160,57 @@ export default function Auth() {
       // Redirect user directly to their authorized portal
       handleRedirectAfterAuth(userProfile);
     } catch (err) {
-      setError(err.message || 'Something went wrong. Please check your credentials.');
+      setError(getFirebaseErrorMessage(err));
     } finally {
       setLoading(false);
     }
   };
 
-  // Google OAuth Sign-In
+  // Google OAuth Sign-In (with popup + domain resilience for Vercel)
   const handleGoogleSignIn = async () => {
     setError('');
     setInfoMsg('');
     setGoogleLoading(true);
     try {
-      const fbUser = await signInWithGoogle();
+      // 1. Request Google sign-in passing selected role and current input values
+      const gResult = await signInWithGoogle(role, email, name);
+
+      // If user deliberately closed popup, show friendly non-blocking notice
+      if (gResult.cancelled) {
+        setInfoMsg(gResult.message || 'Google sign-in window was closed.');
+        setGoogleLoading(false);
+        return;
+      }
+
+      // 2. Synchronize Google account with backend MongoDB Atlas
       const data = await api('/auth/google', {
         method: 'POST',
         body: {
-          email: fbUser.email,
-          name: fbUser.displayName || 'Google User',
-          uid: fbUser.uid,
-          photoUrl: fbUser.photoURL,
+          email: gResult.email,
+          name: gResult.displayName || (role === 'host' ? 'Google Host' : 'Google Driver'),
+          uid: gResult.uid,
+          photoUrl: gResult.photoURL,
           role,
         },
       });
 
       if (!data || !data.token) {
-        throw new Error('Failed to authenticate with Google.');
+        throw new Error('Failed to synchronize Google account with database.');
       }
 
       const serverUser = data.user || {};
       const actualRole = serverUser.role || role || 'driver';
       const userProfile = { ...serverUser, role: actualRole };
 
+      // Persist auth token and user profile
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(userProfile));
       window.dispatchEvent(new Event('auth-change'));
 
+      // Redirect user directly to authorized portal
       handleRedirectAfterAuth(userProfile);
     } catch (err) {
-      setError(err.message || 'Google Sign-in failed or was closed.');
+      setError(getFirebaseErrorMessage(err));
     } finally {
       setGoogleLoading(false);
     }

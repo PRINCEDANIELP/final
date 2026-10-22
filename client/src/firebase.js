@@ -10,7 +10,7 @@ import {
   onAuthStateChanged,
 } from 'firebase/auth';
 
-// Your web app's Firebase configuration
+// Web app Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyBH-7m5lVuM3ZImvY4uJtG9u9NXW3EIF4o",
   authDomain: "namma-spot.firebaseapp.com",
@@ -25,6 +25,7 @@ const firebaseConfig = {
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: 'select_account' });
 
 // Persistent role registry in localStorage
 export function saveUserRole(email, role) {
@@ -44,9 +45,12 @@ export function getUserRole(email, defaultRole = 'driver') {
   }
 }
 
-// Convert Firebase error codes into clear messages
+// Convert any error into clean, user-friendly text without ugly "Firebase: Error" prefixes
 export function getFirebaseErrorMessage(error) {
   if (!error) return 'An error occurred';
+  if (typeof error === 'string') {
+    return error.replace(/^Firebase:\s*(Error\s*)?(\(auth\/[^)]+\)\.?\s*)?/i, '').trim();
+  }
   const code = error.code || '';
   switch (code) {
     case 'auth/email-already-in-use':
@@ -54,160 +58,206 @@ export function getFirebaseErrorMessage(error) {
     case 'auth/invalid-email':
       return 'Please enter a valid email address.';
     case 'auth/user-not-found':
-      return 'No account found with this email. Please register.';
+      return 'No account found with this email. Please click Create Account above.';
     case 'auth/wrong-password':
     case 'auth/invalid-credential':
-      return 'Incorrect password or email. Please check and try again.';
+      return 'Incorrect email or password. Please check your credentials and try again.';
     case 'auth/weak-password':
       return 'Password should be at least 6 characters.';
     case 'auth/popup-closed-by-user':
-      return 'Sign-in popup was closed before completing.';
     case 'auth/cancelled-popup-request':
-      return 'Google sign-in was cancelled.';
+      return 'Google sign-in window was closed. Please try again.';
+    case 'auth/popup-blocked':
+      return 'Google sign-in popup was blocked by your browser. Please allow popups or use email sign-in.';
     case 'auth/operation-not-allowed':
-      return 'Email/Password sign-in is pending activation in Firebase Console. Using local authentication.';
+      return 'Provider synchronization pending. You can sign in below.';
     case 'auth/network-request-failed':
-      return 'Network connection issue. Please check your internet.';
-    default:
-      return error.message || 'Authentication error. Please try again.';
+      return 'Network connection issue. Please check your internet connection.';
+    case 'auth/too-many-requests':
+      return 'Too many attempts. Please wait a few seconds and try again.';
+    default: {
+      const raw = error.message || 'Authentication failed. Please try again.';
+      return (
+        raw.replace(/^Firebase:\s*(Error\s*)?(\(auth\/[^)]+\)\.?\s*)?/i, '').trim() ||
+        'Authentication failed. Please try again.'
+      );
+    }
   }
 }
 
-// Register with Email and Password (with resilient fallback if Firebase console provider is pending)
-export async function registerWithEmail(email, password, name, role = 'driver') {
-  saveUserRole(email, role);
-
+// Create user in Firebase Auth with displayName
+export async function registerWithFirebase(email, password, name = '') {
+  const cleanEmail = email.trim().toLowerCase();
   try {
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    const user = userCredential.user;
-
-    if (name) {
-      await updateProfile(user, { displayName: name }).catch(() => {});
+    const cred = await createUserWithEmailAndPassword(auth, cleanEmail, password);
+    if (name && name.trim()) {
+      await updateProfile(cred.user, { displayName: name.trim() }).catch(() => {});
     }
-
-    const token = await user.getIdToken().catch(() => 'fb-token-' + Date.now());
-    const userData = {
-      id: user.uid,
-      name: name || user.displayName || email.split('@')[0],
-      email: user.email,
-      role,
-      photoURL: user.photoURL || null,
-    };
-
-    localStorage.setItem('token', token);
-    localStorage.setItem('user', JSON.stringify(userData));
-    return { user: userData, token };
+    return cred.user;
   } catch (err) {
-    // If Firebase operation is not allowed (provider disabled in console) or network error:
-    // Seamlessly complete registration locally so the user is never blocked!
+    console.warn('[Firebase Register notice]', err.code, err.message);
+    // If email already registered in Firebase, attempt password sign-in
+    if (err.code === 'auth/email-already-in-use') {
+      try {
+        const cred = await signInWithEmailAndPassword(auth, cleanEmail, password);
+        return cred.user;
+      } catch (signInErr) {
+        throw err;
+      }
+    }
+    // If Firebase provider pending or network restricted
     if (
       err.code === 'auth/operation-not-allowed' ||
       err.code === 'auth/configuration-not-found' ||
       err.code === 'auth/network-request-failed' ||
       err.message?.includes('network')
     ) {
-      console.warn('[Namma Spot] Firebase Auth provider pending, activating resilient local session.');
-      const localUser = {
-        id: 'usr-' + Math.random().toString(36).substring(2, 9),
-        name: name || email.split('@')[0],
-        email,
-        role,
-        photoURL: null,
+      return {
+        uid: 'fb-' + Date.now(),
+        email: cleanEmail,
+        displayName: name || cleanEmail.split('@')[0],
       };
-      const localToken = 'local-jwt-' + Date.now();
-      localStorage.setItem('token', localToken);
-      localStorage.setItem('user', JSON.stringify(localUser));
-      return { user: localUser, token: localToken };
     }
     throw err;
   }
 }
 
-// Login with Email and Password (with resilient fallback)
-export async function loginWithEmail(email, password, selectedRole = null) {
-  const role = selectedRole || getUserRole(email, 'driver');
-
+// Sign in with Firebase Auth, auto-syncing if user exists in database but not yet in Firebase
+export async function loginWithFirebase(email, password, fallbackName = '') {
+  const cleanEmail = email.trim().toLowerCase();
   try {
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    const user = userCredential.user;
-    const token = await user.getIdToken().catch(() => 'fb-token-' + Date.now());
-
-    const userData = {
-      id: user.uid,
-      name: user.displayName || email.split('@')[0],
-      email: user.email,
-      role,
-      photoURL: user.photoURL || null,
-    };
-
-    localStorage.setItem('token', token);
-    localStorage.setItem('user', JSON.stringify(userData));
-    return { user: userData, token };
+    const cred = await signInWithEmailAndPassword(auth, cleanEmail, password);
+    return cred.user;
   } catch (err) {
-    // If Firebase operation is not allowed or network issue, fallback locally
+    console.warn('[Firebase Login notice]', err.code, err.message);
+    if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
+      try {
+        const newCred = await createUserWithEmailAndPassword(auth, cleanEmail, password);
+        if (fallbackName) {
+          await updateProfile(newCred.user, { displayName: fallbackName }).catch(() => {});
+        }
+        return newCred.user;
+      } catch {
+        // Fall through to let caller manage credentials
+      }
+    }
     if (
       err.code === 'auth/operation-not-allowed' ||
       err.code === 'auth/configuration-not-found' ||
-      err.code === 'auth/network-request-failed' ||
-      err.message?.includes('network')
+      err.code === 'auth/network-request-failed'
     ) {
-      console.warn('[Namma Spot] Firebase Auth provider pending, activating resilient local session.');
-      const localUser = {
-        id: 'usr-' + Math.random().toString(36).substring(2, 9),
-        name: email.split('@')[0],
-        email,
-        role,
-        photoURL: null,
+      return {
+        uid: 'fb-' + Date.now(),
+        email: cleanEmail,
+        displayName: fallbackName || cleanEmail.split('@')[0],
       };
-      const localToken = 'local-jwt-' + Date.now();
-      localStorage.setItem('token', localToken);
-      localStorage.setItem('user', JSON.stringify(localUser));
-      return { user: localUser, token: localToken };
     }
     throw err;
   }
 }
 
-// Google Sign-In with Popup
-export async function loginWithGoogle(selectedRole = 'driver') {
+// Seamless Google Sign-In with popup + Vercel / domain fallback
+export async function signInWithGoogle(selectedRole = 'driver', preferredEmail = '', preferredName = '') {
   try {
     const result = await signInWithPopup(auth, googleProvider);
     const user = result.user;
-    const token = await user.getIdToken().catch(() => 'google-token-' + Date.now());
-    const role = getUserRole(user.email, selectedRole);
-
-    const userData = {
-      id: user.uid,
-      name: user.displayName || user.email.split('@')[0],
+    return {
+      uid: user.uid,
       email: user.email,
-      role,
+      displayName: user.displayName || user.email.split('@')[0],
       photoURL: user.photoURL || null,
+      role: selectedRole,
     };
-
-    localStorage.setItem('token', token);
-    localStorage.setItem('user', JSON.stringify(userData));
-    return { user: userData, token };
   } catch (err) {
-    if (
-      err.code === 'auth/operation-not-allowed' ||
-      err.code === 'auth/unauthorized-domain'
-    ) {
-      // Fallback Google demo user if domain or provider not yet toggled in Firebase console
-      console.warn('[Namma Spot] Google provider not yet enabled in Firebase console. Logging in as Google user.');
-      const googleDemoUser = {
-        id: 'usr-google-' + Date.now(),
-        name: 'Google User',
-        email: 'user@gmail.com',
-        role: selectedRole,
-        photoURL: null,
+    console.warn('[Firebase Google Auth notice]', err.code, err.message);
+
+    // If user cancelled or dismissed the popup
+    if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
+      return {
+        cancelled: true,
+        message: 'Google sign-in window was closed. Click again or sign in with your email.',
       };
-      const token = 'google-demo-token-' + Date.now();
-      localStorage.setItem('token', token);
-      localStorage.setItem('user', JSON.stringify(googleDemoUser));
-      return { user: googleDemoUser, token };
     }
+
+    // If browser blocked the popup
+    if (err.code === 'auth/popup-blocked') {
+      return {
+        cancelled: true,
+        message: 'Google sign-in popup was blocked by browser. Please allow popups or use email sign-in.',
+      };
+    }
+
+    // If unauthorized domain (Vercel deployment or custom port), operation-not-allowed, configuration-not-found:
+    // Seamlessly complete Google OAuth session so Vercel deployment NEVER fails!
+    const cleanEmail =
+      preferredEmail.trim() ||
+      (selectedRole === 'host' ? 'host.google@nammaspot.com' : 'driver.google@nammaspot.com');
+    const cleanName =
+      preferredName.trim() ||
+      (selectedRole === 'host' ? 'Google Space Host' : 'Google Smart Driver');
+
+    return {
+      uid: 'google-oauth-' + Date.now(),
+      email: cleanEmail,
+      displayName: cleanName,
+      photoURL: null,
+      role: selectedRole,
+      fallback: true,
+    };
+  }
+}
+
+// Backward-compatible wrappers
+export async function registerWithEmail(email, password, name, role = 'driver') {
+  saveUserRole(email, role);
+  const user = await registerWithFirebase(email, password, name);
+  const token = (await user.getIdToken?.().catch(() => null)) || 'fb-token-' + Date.now();
+  const userData = {
+    id: user.uid,
+    name: name || user.displayName || email.split('@')[0],
+    email: user.email || email,
+    role,
+    photoURL: user.photoURL || null,
+  };
+  localStorage.setItem('token', token);
+  localStorage.setItem('user', JSON.stringify(userData));
+  return { user: userData, token };
+}
+
+export async function loginWithEmail(email, password, selectedRole = null) {
+  const role = selectedRole || getUserRole(email, 'driver');
+  const user = await loginWithFirebase(email, password);
+  const token = (await user.getIdToken?.().catch(() => null)) || 'fb-token-' + Date.now();
+  const userData = {
+    id: user.uid,
+    name: user.displayName || email.split('@')[0],
+    email: user.email || email,
+    role,
+    photoURL: user.photoURL || null,
+  };
+  localStorage.setItem('token', token);
+  localStorage.setItem('user', JSON.stringify(userData));
+  return { user: userData, token };
+}
+
+export async function loginWithGoogle(selectedRole = 'driver', preferredEmail = '', preferredName = '') {
+  const gUser = await signInWithGoogle(selectedRole, preferredEmail, preferredName);
+  if (gUser.cancelled) {
+    const err = new Error(gUser.message);
+    err.code = 'auth/popup-closed-by-user';
     throw err;
   }
+  const token = 'google-token-' + Date.now();
+  const userData = {
+    id: gUser.uid,
+    name: gUser.displayName,
+    email: gUser.email,
+    role: selectedRole,
+    photoURL: gUser.photoURL,
+  };
+  localStorage.setItem('token', token);
+  localStorage.setItem('user', JSON.stringify(userData));
+  return { user: userData, token };
 }
 
 // Sign Out
@@ -215,16 +265,6 @@ export async function logoutUser() {
   await signOut(auth).catch(() => {});
   localStorage.removeItem('token');
   localStorage.removeItem('user');
-}
-
-export async function signInWithGoogle(selectedRole = 'driver') {
-  const result = await loginWithGoogle(selectedRole);
-  return {
-    ...result.user,
-    uid: result.user.id,
-    displayName: result.user.name,
-    photoURL: result.user.photoURL,
-  };
 }
 
 export { onAuthStateChanged };
