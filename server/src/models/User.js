@@ -15,6 +15,7 @@ const userSchema = new mongoose.Schema(
     isVerified: { type: Boolean, default: false },
     city: { type: String, default: '' },
     address: { type: String, default: '' },
+    vehicleNumber: { type: String, default: '' },
   },
   { timestamps: true }
 );

@@ -38,10 +38,21 @@ const publicUser = (u) => ({
   isVerified: Boolean(u.isVerified || (u.aadhaarNumber && u.licenceNumber)),
   city: u.city || '',
   address: u.address || '',
+  vehicleNumber: u.vehicleNumber || '',
 });
 
 router.post('/register', async (req, res) => {
-  const { name, password, role } = req.body;
+  const {
+    name,
+    password,
+    role,
+    phone = '',
+    city = '',
+    address = '',
+    aadhaarNumber = '',
+    licenceNumber = '',
+    vehicleNumber = '',
+  } = req.body;
   const email = (req.body.email || '').toLowerCase().trim();
 
   if (!name || !email || !password || password.length < 6) {
@@ -56,15 +67,16 @@ router.post('/register', async (req, res) => {
     email,
     role: assignedRole,
     passwordHash,
-    phone: '',
-    aadhaarNumber: '',
+    phone: (phone || '').trim(),
+    city: (city || '').trim(),
+    address: (address || '').trim(),
+    aadhaarNumber: (aadhaarNumber || '').trim(),
     aadhaarPhotoUrl: '',
-    licenceName: '',
-    licenceNumber: '',
+    licenceName: assignedRole === 'driver' ? name.trim() : '',
+    licenceNumber: (licenceNumber || '').trim(),
     licencePhotoUrl: '',
-    isVerified: false,
-    city: '',
-    address: '',
+    vehicleNumber: (vehicleNumber || '').trim().toUpperCase(),
+    isVerified: Boolean(aadhaarNumber && licenceNumber),
   };
 
   // 1. If MongoDB is connected, also persist to MongoDB
@@ -78,6 +90,16 @@ router.post('/register', async (req, res) => {
         email: newUser.email,
         role: newUser.role,
         passwordHash: newUser.passwordHash,
+        phone: newUser.phone,
+        city: newUser.city,
+        address: newUser.address,
+        aadhaarNumber: newUser.aadhaarNumber,
+        aadhaarPhotoUrl: newUser.aadhaarPhotoUrl,
+        licenceName: newUser.licenceName,
+        licenceNumber: newUser.licenceNumber,
+        licencePhotoUrl: newUser.licencePhotoUrl,
+        vehicleNumber: newUser.vehicleNumber,
+        isVerified: newUser.isVerified,
       });
       newUser._id = String(dbUser._id);
     } catch (err) {
@@ -94,7 +116,11 @@ router.post('/register', async (req, res) => {
   fallbackUsers.set(email, newUser);
   fileDb.saveUser(newUser);
 
-  return res.status(201).json({ token: sign(newUser), user: publicUser(newUser) });
+  return res.status(201).json({
+    token: sign(newUser),
+    user: publicUser(newUser),
+    message: 'Account created successfully! Please sign in with your credentials.',
+  });
 });
 
 router.post('/login', async (req, res) => {

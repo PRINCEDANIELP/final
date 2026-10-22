@@ -23,6 +23,12 @@ export default function Auth() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [city, setCity] = useState('');
+  const [address, setAddress] = useState('');
+  const [licenceNumber, setLicenceNumber] = useState('');
+  const [vehicleNumber, setVehicleNumber] = useState('');
+
   const [error, setError] = useState('');
   const [infoMsg, setInfoMsg] = useState('');
   const [loading, setLoading] = useState(false);
@@ -58,15 +64,43 @@ export default function Auth() {
     setLoading(true);
 
     try {
-      const path = mode === 'register' ? '/auth/register' : '/auth/login';
-      const payload =
-        mode === 'register'
-          ? { email: email.trim(), password, name: name.trim(), role }
-          : { email: email.trim(), password };
+      if (mode === 'register') {
+        // 1. Create account: Store all user details for Driver or Host in database
+        const payload = {
+          name: name.trim(),
+          email: email.trim(),
+          password,
+          role,
+          phone: phone.trim(),
+          city: city.trim(),
+          address: address.trim(),
+          licenceNumber: licenceNumber.trim(),
+          vehicleNumber: vehicleNumber.trim(),
+        };
 
-      const data = await api(path, {
+        const data = await api('/auth/register', {
+          method: 'POST',
+          body: payload,
+        });
+
+        if (!data || !data.user) {
+          throw new Error('Registration failed. Please try again.');
+        }
+
+        // Account successfully created in DB -> Prompt user to sign in
+        setPassword('');
+        setMode('login');
+        setInfoMsg(
+          data.message ||
+            'Account created successfully in database! Please sign in with your email and password.'
+        );
+        return;
+      }
+
+      // 2. Sign In mode
+      const data = await api('/auth/login', {
         method: 'POST',
-        body: payload,
+        body: { email: email.trim(), password },
       });
 
       if (!data || !data.token) {
@@ -140,7 +174,7 @@ export default function Auth() {
       className="w-full flex items-center justify-center min-h-[78vh] py-8 px-4"
     >
       <div className="w-full max-w-md bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/90 shadow-xl shadow-slate-200/50 mx-auto relative overflow-hidden">
-        {/* Subtle top accent border */}
+        {/* Top accent border */}
         <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600" />
 
         {/* Brand Header */}
@@ -157,61 +191,13 @@ export default function Auth() {
           </h1>
           <p className="text-slate-500 text-xs sm:text-sm mt-1 max-w-xs">
             {mode === 'login'
-              ? `Sign in to access your ${role === 'host' ? 'Host Dashboard' : 'Driver Portal'}`
-              : `Join Namma Spots as a ${role === 'host' ? 'Parking Host' : 'Driver'}`}
+              ? 'Sign in to access your Namma Spots portal'
+              : `Register your new ${role === 'host' ? 'Host' : 'Driver'} account in database`}
           </p>
         </div>
 
-        {/* Portal / Role Selector Tabs */}
-        <div className="mb-4">
-          <div className="flex items-center justify-between mb-1.5 px-0.5">
-            <span className="text-[11px] font-black uppercase tracking-wider text-slate-500">
-              Select Account Type
-            </span>
-            <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
-              {role === 'driver' ? 'Looking for Parking' : 'Renting Out a Space'}
-            </span>
-          </div>
-
-          <div className="grid grid-cols-2 bg-slate-100/80 p-1.5 rounded-2xl gap-1.5 border border-slate-200/60">
-            <button
-              type="button"
-              id="role-driver-btn"
-              onClick={() => {
-                setRole('driver');
-                setError('');
-              }}
-              className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                role === 'driver'
-                  ? 'bg-emerald-600 text-white shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
-              }`}
-            >
-              <span className="text-base">🚗</span>
-              <span className="truncate">Driver Portal</span>
-            </button>
-
-            <button
-              type="button"
-              id="role-host-btn"
-              onClick={() => {
-                setRole('host');
-                setError('');
-              }}
-              className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                role === 'host'
-                  ? 'bg-emerald-600 text-white shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
-              }`}
-            >
-              <span className="text-base">🅿️</span>
-              <span className="truncate">Host Dashboard</span>
-            </button>
-          </div>
-        </div>
-
         {/* Mode Selector Tabs (Sign In vs Create Account) */}
-        <div className="flex bg-slate-100/70 p-1 rounded-xl mb-5 gap-1 border border-slate-200/50">
+        <div className="flex bg-slate-100/70 p-1 rounded-xl mb-4 gap-1 border border-slate-200/50">
           <button
             type="button"
             id="mode-login-btn"
@@ -246,13 +232,97 @@ export default function Auth() {
           </button>
         </div>
 
+        {/* Account Role Selector (Only shown or highlighted for clarity) */}
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-1.5 px-0.5">
+            <span className="text-[11px] font-black uppercase tracking-wider text-slate-500">
+              {mode === 'register' ? 'Account Type' : 'Select Portal'}
+            </span>
+            <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+              {role === 'driver' ? 'Driver Account' : 'Space Host'}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 bg-slate-100/80 p-1.5 rounded-2xl gap-1.5 border border-slate-200/60">
+            <button
+              type="button"
+              id="role-driver-btn"
+              onClick={() => {
+                setRole('driver');
+                setError('');
+              }}
+              className={`py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                role === 'driver'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+              }`}
+            >
+              {/* Clean Car Vector SVG */}
+              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.5 2.8C2.1 10.9 2 11.2 2 11.5V16c0 .6.4 1 1 1h2" />
+                <circle cx="7" cy="17" r="2" />
+                <circle cx="17" cy="17" r="2" />
+              </svg>
+              <span className="truncate">Driver Portal</span>
+            </button>
+
+            <button
+              type="button"
+              id="role-host-btn"
+              onClick={() => {
+                setRole('host');
+                setError('');
+              }}
+              className={`py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                role === 'host'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+              }`}
+            >
+              {/* Clean Parking P Vector SVG */}
+              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect width="18" height="18" x="3" y="3" rx="4" />
+                <path d="M9 17V7h4a3 3 0 0 1 0 6H9" />
+              </svg>
+              <span className="truncate">Host Dashboard</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Feedback Messages */}
+        {error && (
+          <div
+            role="alert"
+            className="mb-4 p-3 rounded-xl bg-red-50 text-red-700 border border-red-200 text-xs font-semibold text-center flex items-center justify-center gap-2"
+          >
+            <svg className="w-4 h-4 text-red-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            <span>{error}</span>
+          </div>
+        )}
+        {infoMsg && (
+          <div
+            role="status"
+            className="mb-4 p-3.5 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-semibold text-center flex items-center justify-center gap-2 shadow-xs"
+          >
+            <svg className="w-4 h-4 text-emerald-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+              <polyline points="22 4 12 14.01 9 11.01" />
+            </svg>
+            <span>{infoMsg}</span>
+          </div>
+        )}
+
         {/* Google 1-Click Sign-In */}
         <button
           type="button"
           id="google-signin-btn"
           onClick={handleGoogleSignIn}
           disabled={googleLoading || loading}
-          className="w-full flex items-center justify-center gap-2.5 bg-white text-slate-700 border border-slate-300 hover:bg-slate-50/80 hover:border-slate-400 py-2.5 px-4 rounded-xl font-semibold text-xs sm:text-sm cursor-pointer shadow-xs transition-all disabled:opacity-60"
+          className="w-full flex items-center justify-center gap-2.5 bg-white text-slate-700 border border-slate-300 hover:bg-slate-50/80 hover:border-slate-400 py-2.5 px-4 rounded-xl font-semibold text-xs sm:text-sm cursor-pointer shadow-xs transition-all disabled:opacity-60 mb-4"
           title={`Sign in with Google as ${role === 'host' ? 'Host' : 'Driver'}`}
         >
           <svg width="18" height="18" viewBox="0 0 48 48" className="shrink-0">
@@ -278,40 +348,134 @@ export default function Auth() {
           </span>
         </button>
 
-        <div className="flex items-center my-4.5 before:content-[''] before:flex-1 before:border-b before:border-slate-200 after:content-[''] after:flex-1 after:border-b after:border-slate-200">
+        <div className="flex items-center mb-4 before:content-[''] before:flex-1 before:border-b before:border-slate-200 after:content-[''] after:flex-1 after:border-b after:border-slate-200">
           <span className="px-3 text-slate-400 text-[10px] font-bold tracking-wider uppercase">
             OR WITH EMAIL
           </span>
         </div>
 
-        {/* Email & Password Form */}
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3.5" data-testid="auth-form">
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3" data-testid="auth-form">
           {mode === 'register' && (
-            <div>
-              <label htmlFor="auth-name" className="block text-xs font-bold text-slate-700 mb-1">
-                {role === 'host' ? 'Host / Owner Full Name' : 'Driver Full Name'}
-              </label>
-              <div className="relative flex items-center">
-                <span className="absolute left-3.5 text-slate-400 text-sm pointer-events-none">👤</span>
-                <input
-                  id="auth-name"
-                  type="text"
-                  placeholder={role === 'host' ? 'e.g. Sundar Raman' : 'e.g. Rahul Sharma'}
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required={mode === 'register'}
-                  className="w-full pl-10 pr-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 transition-all placeholder:text-slate-400"
-                />
+            <>
+              {/* Full Name */}
+              <div>
+                <label htmlFor="auth-name" className="block text-xs font-bold text-slate-700 mb-1">
+                  {role === 'host' ? 'Host / Owner Full Name' : 'Driver Full Name'}
+                </label>
+                <div className="relative flex items-center">
+                  <span className="absolute left-3.5 pointer-events-none">
+                    <svg className="w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+                      <circle cx="12" cy="7" r="4" />
+                    </svg>
+                  </span>
+                  <input
+                    id="auth-name"
+                    type="text"
+                    placeholder={role === 'host' ? 'e.g. Sundar Raman' : 'e.g. Rahul Sharma'}
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required
+                    className="w-full pl-10 pr-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 transition-all placeholder:text-slate-400"
+                  />
+                </div>
               </div>
-            </div>
+
+              {/* Mobile Phone Number */}
+              <div>
+                <label htmlFor="auth-phone" className="block text-xs font-bold text-slate-700 mb-1">
+                  Mobile Phone Number
+                </label>
+                <div className="relative flex items-center">
+                  <span className="absolute left-3.5 pointer-events-none">
+                    <svg className="w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                    </svg>
+                  </span>
+                  <input
+                    id="auth-phone"
+                    type="tel"
+                    placeholder="+91 98401 23456"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    className="w-full pl-10 pr-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 transition-all placeholder:text-slate-400"
+                  />
+                </div>
+              </div>
+
+              {/* City / Location */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label htmlFor="auth-city" className="block text-xs font-bold text-slate-700 mb-1">
+                    City / Town
+                  </label>
+                  <div className="relative flex items-center">
+                    <span className="absolute left-3 pointer-events-none">
+                      <svg className="w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0" />
+                        <circle cx="12" cy="10" r="3" />
+                      </svg>
+                    </span>
+                    <input
+                      id="auth-city"
+                      type="text"
+                      placeholder="e.g. Chennai"
+                      value={city}
+                      onChange={(e) => setCity(e.target.value)}
+                      className="w-full pl-9 pr-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 transition-all placeholder:text-slate-400"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="auth-detail" className="block text-xs font-bold text-slate-700 mb-1">
+                    {role === 'host' ? 'Bay Address' : 'Vehicle Number'}
+                  </label>
+                  <div className="relative flex items-center">
+                    <span className="absolute left-3 pointer-events-none">
+                      <svg className="w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="2" y="5" width="20" height="14" rx="2" />
+                        <line x1="2" y1="10" x2="22" y2="10" />
+                      </svg>
+                    </span>
+                    {role === 'host' ? (
+                      <input
+                        id="auth-detail"
+                        type="text"
+                        placeholder="e.g. T. Nagar"
+                        value={address}
+                        onChange={(e) => setAddress(e.target.value)}
+                        className="w-full pl-9 pr-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 transition-all placeholder:text-slate-400"
+                      />
+                    ) : (
+                      <input
+                        id="auth-detail"
+                        type="text"
+                        placeholder="TN09AB1234"
+                        value={vehicleNumber}
+                        onChange={(e) => setVehicleNumber(e.target.value.toUpperCase())}
+                        className="w-full pl-9 pr-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-mono text-slate-900 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 transition-all placeholder:text-slate-400"
+                      />
+                    )}
+                  </div>
+                </div>
+              </div>
+            </>
           )}
 
+          {/* Email Address */}
           <div>
             <label htmlFor="auth-email" className="block text-xs font-bold text-slate-700 mb-1">
               Email Address
             </label>
             <div className="relative flex items-center">
-              <span className="absolute left-3.5 text-slate-400 text-sm pointer-events-none">✉️</span>
+              <span className="absolute left-3.5 pointer-events-none">
+                <svg className="w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect width="20" height="16" x="2" y="4" rx="2" />
+                  <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+                </svg>
+              </span>
               <input
                 id="auth-email"
                 type="email"
@@ -324,6 +488,7 @@ export default function Auth() {
             </div>
           </div>
 
+          {/* Password */}
           <div>
             <div className="flex items-center justify-between mb-1">
               <label htmlFor="auth-password" className="block text-xs font-bold text-slate-700">
@@ -334,7 +499,12 @@ export default function Auth() {
               )}
             </div>
             <div className="relative flex items-center">
-              <span className="absolute left-3.5 text-slate-400 text-sm pointer-events-none">🔒</span>
+              <span className="absolute left-3.5 pointer-events-none">
+                <svg className="w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+              </span>
               <input
                 id="auth-password"
                 type={showPassword ? 'text' : 'password'}
@@ -343,20 +513,33 @@ export default function Auth() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 minLength={6}
-                className="w-full pl-10 pr-12 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 transition-all placeholder:text-slate-400"
+                className="w-full pl-10 pr-11 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 transition-all placeholder:text-slate-400"
               />
               <button
                 type="button"
                 id="toggle-password-btn"
-                className="absolute right-2 px-2 py-1 text-xs font-bold text-slate-500 hover:text-slate-800 cursor-pointer"
+                className="absolute right-3 p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
                 onClick={() => setShowPassword(!showPassword)}
                 title={showPassword ? 'Hide password' : 'Show password'}
               >
-                {showPassword ? 'Hide' : 'Show'}
+                {showPassword ? (
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+                    <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+                    <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+                    <line x1="2" y1="2" x2="22" y2="22" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                )}
               </button>
             </div>
           </div>
 
+          {/* Submit Button */}
           <button
             type="submit"
             id="auth-submit-btn"
@@ -369,7 +552,7 @@ export default function Auth() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                 </svg>
-                <span>Authenticating...</span>
+                <span>{mode === 'register' ? 'Creating Account in DB...' : 'Signing In...'}</span>
               </>
             ) : mode === 'login' ? (
               <span>Sign In</span>
@@ -378,26 +561,6 @@ export default function Auth() {
             )}
           </button>
         </form>
-
-        {/* Feedback Messages */}
-        {error && (
-          <div
-            role="alert"
-            className="mt-3.5 p-3 rounded-xl bg-red-50 text-red-700 border border-red-200 text-xs font-semibold text-center flex items-center justify-center gap-2"
-          >
-            <span>⚠️</span>
-            <span>{error}</span>
-          </div>
-        )}
-        {infoMsg && (
-          <div
-            role="status"
-            className="mt-3.5 p-3 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-semibold text-center flex items-center justify-center gap-2"
-          >
-            <span>✓</span>
-            <span>{infoMsg}</span>
-          </div>
-        )}
 
         {/* Toggle Mode Link */}
         <div className="text-center mt-5 pt-4 border-t border-slate-100">
@@ -413,13 +576,13 @@ export default function Auth() {
           >
             {mode === 'login' ? (
               <>
-                New to Namma Spots?{' '}
-                <strong className="text-emerald-600 hover:underline">Create an account</strong>
+                New user? First{' '}
+                <strong className="text-emerald-600 hover:underline">Create an Account</strong>
               </>
             ) : (
               <>
-                Already have an account?{' '}
-                <strong className="text-emerald-600 hover:underline">Sign in</strong>
+                Already registered?{' '}
+                <strong className="text-emerald-600 hover:underline">Sign In here</strong>
               </>
             )}
           </button>
