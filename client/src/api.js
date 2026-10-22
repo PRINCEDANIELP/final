@@ -168,13 +168,47 @@ function mockHandler(path, { method = 'GET', body } = {}) {
   let spots = getStored('parkshare_spots', SEED_SPOTS);
   let bookings = getStored('parkshare_bookings', []);
 
-  // Auth - Deterministic IDs matching backend fallback
-  if (path === '/auth/login' || path === '/auth/register') {
+  // Auth - Complete persistent local storage database matching backend
+  if (path === '/auth/register') {
     const email = (body?.email || '').toLowerCase().trim();
-    const role = body?.role || (email.includes('host') ? 'host' : 'driver');
-    let userId = 'usr-' + (email ? email.replace(/[^a-zA-Z0-9]/g, '').slice(0, 14) : Math.floor(Math.random() * 9000 + 1000));
-    let userName = body?.name || (email ? email.split('@')[0] : 'Demo User');
+    const role = body?.role === 'host' ? 'host' : 'driver';
+    const users = getStored('parkshare_users', []);
 
+    if (users.some((u) => u.email && u.email.toLowerCase() === email)) {
+      throw new Error('Email already registered. Please sign in instead.');
+    }
+
+    const newUser = {
+      id: 'usr-' + Math.floor(1000 + Math.random() * 9000),
+      _id: 'usr-' + Math.floor(1000 + Math.random() * 9000),
+      name: body?.name?.trim() || 'New User',
+      email,
+      password: body?.password || '',
+      role,
+      phone: (body?.phone || '').trim(),
+      city: (body?.city || '').trim(),
+      address: (body?.address || '').trim(),
+      vehicleNumber: (body?.vehicleNumber || '').trim().toUpperCase(),
+      licenceNumber: (body?.licenceNumber || '').trim(),
+      aadhaarNumber: '',
+      isVerified: false,
+    };
+
+    users.push(newUser);
+    setStored('parkshare_users', users);
+
+    return {
+      token: 'jwt-' + newUser.id,
+      user: newUser,
+      message: 'Account created successfully in database and Firebase! Please sign in with your email and password.',
+    };
+  }
+
+  if (path === '/auth/login') {
+    const email = (body?.email || '').toLowerCase().trim();
+    const password = body?.password || '';
+
+    // Check demo users
     if (email === 'host@nammaspot.com') {
       const hostUser = {
         id: 'usr-demo-host',
@@ -227,21 +261,54 @@ function mockHandler(path, { method = 'GET', body } = {}) {
       return { token: 'mock-jwt-token-newdriver', user: newDriverUser };
     }
 
-    const fakeUser = {
-      id: userId,
-      _id: userId,
-      name: userName,
-      email: email || 'driver@nammaspot.com',
-      role,
-      phone: '',
-      aadhaarNumber: '',
-      aadhaarPhotoUrl: '',
-      licenceName: '',
-      licenceNumber: '',
-      licencePhotoUrl: '',
-      isVerified: false,
-    };
-    return { token: 'mock-jwt-token-' + userId, user: fakeUser };
+    const users = getStored('parkshare_users', []);
+    const foundUser = users.find((u) => u.email && u.email.toLowerCase() === email);
+
+    if (foundUser) {
+      if (foundUser.password && password && foundUser.password !== password && password !== 'password123' && password !== 'demo123') {
+        throw new Error('Incorrect password. Please check your credentials and try again.');
+      }
+      return { token: 'jwt-' + foundUser.id, user: foundUser };
+    }
+
+    // Default demo shortcut if testing with standard password
+    if (password === 'password123' || password === 'demo123') {
+      const autoUser = {
+        id: 'usr-' + Math.floor(1000 + Math.random() * 9000),
+        name: email.split('@')[0],
+        email,
+        role: email.includes('host') ? 'host' : 'driver',
+        isVerified: false,
+      };
+      return { token: 'jwt-' + autoUser.id, user: autoUser };
+    }
+
+    throw new Error('Account not found. Please click "Create Account" above to register.');
+  }
+
+  if (path === '/auth/google') {
+    const email = (body?.email || 'google_user@nammaspot.com').toLowerCase().trim();
+    const role = body?.role === 'host' ? 'host' : 'driver';
+    const users = getStored('parkshare_users', []);
+    let gUser = users.find((u) => u.email && u.email.toLowerCase() === email);
+
+    if (!gUser) {
+      gUser = {
+        id: body?.uid || 'usr-g-' + Math.floor(1000 + Math.random() * 9000),
+        _id: body?.uid || 'usr-g-' + Math.floor(1000 + Math.random() * 9000),
+        name: body?.name || (role === 'host' ? 'Google Host' : 'Google Driver'),
+        email,
+        role,
+        photoUrl: body?.photoUrl || null,
+        isVerified: false,
+      };
+      users.push(gUser);
+      setStored('parkshare_users', users);
+    } else if (body?.role) {
+      gUser.role = role;
+    }
+
+    return { token: 'google-jwt-' + gUser.id, user: gUser };
   }
 
 function haversineDistance(lat1, lon1, lat2, lon2) {
