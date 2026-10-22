@@ -65,18 +65,45 @@ import User from './models/User.js';
 import ParkingSpot from './models/ParkingSpot.js';
 import Booking from './models/Booking.js';
 
+let isMongoConnecting = false;
+async function connectDB() {
+  if (mongoose.connection.readyState === 1 || isMongoConnecting) return;
+  isMongoConnecting = true;
+  try {
+    const uri =
+      process.env.MONGO_URI ||
+      'mongodb+srv://prince:prince081104@cluster0.p7pt0ci.mongodb.net/parkshare?retryWrites=true&w=majority';
+    await mongoose.connect(uri);
+    console.log('✓ MongoDB Atlas connected successfully');
+  } catch (err) {
+    console.error('MongoDB connection notice:', err.message);
+  } finally {
+    isMongoConnecting = false;
+  }
+}
+
+// Auto-connect middleware for serverless (Vercel)
+app.use(async (req, res, next) => {
+  if (mongoose.connection.readyState !== 1) {
+    await connectDB().catch(() => {});
+  }
+  next();
+});
+
 app.use((err, req, res, next) => {
   console.error(err);
   res.status(err.status || 500).json({ message: err.message || 'Server error' });
 });
 
-const port = process.env.PORT || 5000;
-app.listen(port, () => console.log(`API running on http://localhost:${port}`));
+export default app;
 
-mongoose
-  .connect(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/parkshare')
+if (!process.env.VERCEL) {
+  const port = process.env.PORT || 5000;
+  app.listen(port, () => console.log(`API running on http://localhost:${port}`));
+}
+
+connectDB()
   .then(async () => {
-    console.log('✓ MongoDB Atlas connected successfully');
     try {
       const localUsers = fileDb.getAllUsers();
       for (const u of localUsers) {
