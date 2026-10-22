@@ -791,13 +791,6 @@ export default function Host() {
           </div>
 
           <div className="flex gap-3 items-center flex-wrap">
-            <Link
-              to="/"
-              className="bg-white/15 hover:bg-white/25 text-white border border-white/20 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs"
-            >
-              <span>🔍 Find Parking</span>
-              <span>→</span>
-            </Link>
             <div className="bg-white/15 px-4 py-2.5 rounded-2xl text-center min-w-[100px] border border-white/10 backdrop-blur-xs">
               <span className="block text-2xl font-black text-white">{spots.length}</span>
               <span className="text-[10px] uppercase tracking-wider text-emerald-200 font-bold">

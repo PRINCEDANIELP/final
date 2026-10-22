@@ -75,47 +75,6 @@ export default function Auth() {
     }
   };
 
-  // 1-Click Fast Login for Host, Verified Driver, or New Driver
-  const handleQuickDemoLogin = async (demoRole) => {
-    setError('');
-    setInfoMsg('');
-    setLoading(true);
-
-    try {
-      let demoEmail = 'driver@nammaspot.com';
-      let assignedRole = 'driver';
-
-      if (demoRole === 'host') {
-        demoEmail = 'host@nammaspot.com';
-        assignedRole = 'host';
-      } else if (demoRole === 'new-host') {
-        demoEmail = 'newhost@nammaspot.com';
-        assignedRole = 'host';
-      } else if (demoRole === 'new-driver') {
-        demoEmail = 'newdriver@nammaspot.com';
-        assignedRole = 'driver';
-      }
-
-      const data = await api('/auth/login', {
-        method: 'POST',
-        body: { email: demoEmail, password: 'password123', role: assignedRole },
-      });
-
-      if (!data || !data.token) {
-        throw new Error('Could not authenticate. Please try again.');
-      }
-
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify({ ...data.user, role: assignedRole }));
-
-      handleRedirectAfterAuth({ ...data.user, role: assignedRole }, false);
-    } catch (err) {
-      setError(err.message || 'Quick login failed');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   // Email/Password login or registration
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -186,39 +145,51 @@ export default function Auth() {
   };
 
   return (
-    <div className="w-full flex items-center justify-center min-h-[75vh] py-8 px-4">
-      <div className="w-full max-w-md bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm mx-auto">
+    <div className="w-full min-h-[82vh] flex items-center justify-center py-10 px-4">
+      <div className="w-full max-w-md bg-white rounded-3xl p-7 sm:p-9 border border-slate-200/90 shadow-xl shadow-slate-200/50 mx-auto transition-all">
         {/* Brand Header */}
-        <div className="flex flex-col items-center text-center mb-5">
-          <img src="/logo.png" alt="Namma Spots" className="h-14 w-auto object-contain mb-2 drop-shadow-sm" />
-          <h2 className="text-2xl font-black tracking-tight text-slate-900">
-            Namma Spots
+        <div className="flex flex-col items-center text-center mb-6">
+          <img
+            src="/logo.png"
+            alt="Namma Spots"
+            className="h-16 w-auto object-contain mb-3 drop-shadow-sm hover:scale-105 transition-transform"
+          />
+          <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
+            {mode === 'login' ? 'Welcome Back' : 'Create Account'}
           </h2>
-          <p className="text-slate-500 text-xs mt-0.5">
-            {mode === 'login' ? 'Sign in to access your account' : 'Create an account to get started'}
+          <p className="text-slate-500 text-xs sm:text-sm mt-1">
+            {mode === 'login'
+              ? 'Sign in to access your parking reservations & portal'
+              : 'Join Namma Spots to find or host parking spaces'}
           </p>
         </div>
 
-        {/* Portal / Role Selector Tabs */}
-        <div className="mb-4">
-          <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 text-center">
-            Select Your Portal
-          </label>
-          <div className="flex bg-slate-100 p-1 rounded-2xl gap-1">
+        {/* Portal / Role Selector Toggle */}
+        <div className="mb-5">
+          <div className="flex items-center justify-between mb-1.5 px-1">
+            <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
+              I am signing in as:
+            </span>
+            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
+              {role === 'driver' ? '🚗 Driver Account' : '🅿️ Host Account'}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 p-1 bg-slate-100 rounded-2xl gap-1 border border-slate-200/60">
             <button
               type="button"
               onClick={() => {
                 setRole('driver');
                 setError('');
               }}
-              className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+              className={`py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
                 role === 'driver'
-                  ? 'bg-emerald-600 text-white shadow-xs'
+                  ? 'bg-emerald-600 text-white shadow-sm'
                   : 'text-slate-600 hover:text-slate-900 bg-transparent'
               }`}
             >
               <span>🚗</span>
-              <span>Driver Portal</span>
+              <span>Driver</span>
             </button>
             <button
               type="button"
@@ -226,20 +197,20 @@ export default function Auth() {
                 setRole('host');
                 setError('');
               }}
-              className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+              className={`py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
                 role === 'host'
-                  ? 'bg-emerald-600 text-white shadow-xs'
+                  ? 'bg-emerald-600 text-white shadow-sm'
                   : 'text-slate-600 hover:text-slate-900 bg-transparent'
               }`}
             >
               <span>🅿️</span>
-              <span>Host Dashboard</span>
+              <span>Host</span>
             </button>
           </div>
         </div>
 
         {/* Mode Selector Tabs (Sign In vs Create Account) */}
-        <div className="flex bg-slate-100 p-1 rounded-xl mb-4 gap-1">
+        <div className="flex bg-slate-100 p-1 rounded-xl mb-5 gap-1 border border-slate-200/60">
           <button
             type="button"
             className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
@@ -272,7 +243,7 @@ export default function Auth() {
           </button>
         </div>
 
-        {/* Google 1-Click Sign-In */}
+        {/* Google Sign-In Button */}
         <button
           type="button"
           onClick={handleGoogleSignIn}
@@ -301,16 +272,17 @@ export default function Auth() {
           <span>{googleLoading ? 'Connecting...' : `Continue with Google (${role === 'host' ? 'Host' : 'Driver'})`}</span>
         </button>
 
+        {/* Divider */}
         <div className="flex items-center my-4 before:content-[''] before:flex-1 before:border-b before:border-slate-200 after:content-[''] after:flex-1 after:border-b after:border-slate-200">
           <span className="px-3 text-slate-400 text-[10px] font-bold tracking-wider uppercase">OR WITH EMAIL</span>
         </div>
 
         {/* Email & Password Form */}
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
           {mode === 'register' && (
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
-                {role === 'host' ? 'Host / Owner Name' : 'Driver Full Name'}
+                {role === 'host' ? 'Host / Owner Full Name' : 'Driver Full Name'}
               </label>
               <input
                 type="text"
@@ -318,7 +290,7 @@ export default function Auth() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required={mode === 'register'}
-                className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 transition-all placeholder:text-slate-400"
               />
             </div>
           )}
@@ -329,27 +301,32 @@ export default function Auth() {
             </label>
             <input
               type="email"
-              placeholder={role === 'host' ? 'host@nammaspot.com' : 'driver@nammaspot.com'}
+              placeholder={role === 'host' ? 'host@example.com' : 'driver@example.com'}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 transition-all"
+              className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 transition-all placeholder:text-slate-400"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">
-              Password
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-bold text-slate-700">
+                Password
+              </label>
+              {mode === 'register' && (
+                <span className="text-[10px] text-slate-400 font-medium">Min. 6 characters</span>
+              )}
+            </div>
             <div className="relative flex items-center">
               <input
                 type={showPassword ? 'text' : 'password'}
-                placeholder="Minimum 6 characters"
+                placeholder="Enter your password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 minLength={6}
-                className="w-full px-3.5 py-2.5 pr-12 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                className="w-full px-3.5 py-2.5 pr-12 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 transition-all placeholder:text-slate-400"
               />
               <button
                 type="button"
@@ -365,74 +342,37 @@ export default function Auth() {
           <button
             type="submit"
             disabled={loading || googleLoading}
-            className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-xl transition-all shadow-xs hover:shadow-md cursor-pointer mt-1 disabled:opacity-60"
+            className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-xl transition-all shadow-md shadow-emerald-700/20 hover:shadow-lg cursor-pointer mt-1 disabled:opacity-60 flex items-center justify-center gap-2"
           >
-            {loading
-              ? 'Authenticating...'
-              : mode === 'login'
-              ? `Sign In as ${role === 'host' ? 'Host' : 'Driver'}`
-              : `Create ${role === 'host' ? 'Host' : 'Driver'} Account`}
+            {loading ? (
+              <span>Authenticating...</span>
+            ) : mode === 'login' ? (
+              <span>Sign In as {role === 'host' ? 'Host' : 'Driver'}</span>
+            ) : (
+              <span>Create {role === 'host' ? 'Host' : 'Driver'} Account</span>
+            )}
           </button>
         </form>
 
         {/* Feedback Messages */}
-        {error && <div className="mt-3 p-3 rounded-xl bg-red-50 text-red-700 border border-red-200 text-xs font-semibold text-center">{error}</div>}
-        {infoMsg && <div className="mt-3 p-3 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-semibold text-center">{infoMsg}</div>}
-
-        {/* 1-Click Instant Test Login Buttons */}
-        <div className="mt-5 p-3 bg-slate-50 border border-slate-200 rounded-2xl">
-          <span className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-2 text-center">
-            ⚡ Quick 1-Click Demo Login
-          </span>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <button
-              type="button"
-              onClick={() => handleQuickDemoLogin('driver')}
-              disabled={loading}
-              className="py-2 px-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-xs flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50"
-              title="1-Click Login as Rahul Sharma (Verified Driver)"
-            >
-              <span>🚗</span>
-              <span>Driver</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickDemoLogin('new-driver')}
-              disabled={loading}
-              className="py-2 px-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl transition-all shadow-xs flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50"
-              title="1-Click Login as New Driver (Test KYC Profile Detail Flow)"
-            >
-              <span>🆕</span>
-              <span>New Driver</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickDemoLogin('host')}
-              disabled={loading}
-              className="py-2 px-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-all shadow-xs flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50"
-              title="1-Click Login as Ananya Verma (Pre-verified Host)"
-            >
-              <span>🅿️</span>
-              <span>Host</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickDemoLogin('new-host')}
-              disabled={loading}
-              className="py-2 px-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-xs flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50"
-              title="1-Click Login as New Host (Test Host Profile & Aadhaar Gate)"
-            >
-              <span>📝</span>
-              <span>New Host</span>
-            </button>
+        {error && (
+          <div className="mt-4 p-3 rounded-xl bg-red-50 text-red-700 border border-red-200 text-xs font-semibold text-center flex items-center justify-center gap-1.5">
+            <span>⚠️</span>
+            <span>{error}</span>
           </div>
-        </div>
+        )}
+        {infoMsg && (
+          <div className="mt-4 p-3 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-semibold text-center flex items-center justify-center gap-1.5">
+            <span>✓</span>
+            <span>{infoMsg}</span>
+          </div>
+        )}
 
-        {/* Toggle Mode Link */}
-        <div className="text-center mt-4 pt-3 border-t border-slate-100">
+        {/* Footer Toggle Mode Link */}
+        <div className="text-center mt-6 pt-4 border-t border-slate-100">
           <button
             type="button"
-            className="text-xs text-emerald-600 hover:text-emerald-700 font-bold cursor-pointer hover:underline"
+            className="text-xs text-emerald-600 hover:text-emerald-700 font-bold cursor-pointer hover:underline transition-colors"
             onClick={() => {
               setError('');
               setInfoMsg('');
@@ -440,8 +380,8 @@ export default function Auth() {
             }}
           >
             {mode === 'login'
-              ? 'New to Namma Spots? Click here to Create an Account'
-              : 'Already have an account? Click here to Sign In'}
+              ? "Don't have an account? Sign up here"
+              : 'Already have an account? Sign in here'}
           </button>
         </div>
       </div>
