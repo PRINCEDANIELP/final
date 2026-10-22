@@ -1,0 +1,59 @@
+[
+  {
+    "_id": "spot-1792689112004-989",
+    "host": "usr-new-host",
+    "title": "Murugan's Gated Portico & Car Parking",
+    "address": "22, North Main Road, Vallam, Thanjavur",
+    "location": {
+      "type": "Point",
+      "coordinates": [
+        79.0855,
+        10.7185
+      ]
+    },
+    "vehicleTypes": [
+      "SEDAN",
+      "SUV"
+    ],
+    "hourlyRate": 45,
+    "photoUrl": "https://images.unsplash.com/photo-1590674899484-d5640e854abe?auto=format&fit=crop&w=900&q=80",
+    "photos": [],
+    "amenities": [],
+    "contactPhone": "+91 98401 22334",
+    "contactName": "Murugan (Verified Host)",
+    "instructions": "",
+    "isActive": true,
+    "createdAt": "2026-10-22T17:11:52.004Z",
+    "updatedAt": "2026-10-22T17:11:52.004Z"
+  },
+  {
+    "_id": "spot-1792682265641-429",
+    "host": "usr-3352",
+    "title": "Driver Private Driveway Bay",
+    "address": "Near Periyar Maniammai University, Vallam, Thanjavur",
+    "location": {
+      "type": "Point",
+      "coordinates": [
+        79.0855,
+        10.7185
+      ]
+    },
+    "vehicleTypes": [
+      "SEDAN",
+      "SUV"
+    ],
+    "hourlyRate": 40,
+    "photoUrl": "https://images.unsplash.com/photo-1590674899484-d5640e854abe?auto=format&fit=crop&w=900&q=80",
+    "photos": [],
+    "amenities": [
+      "CCTV Monitored",
+      "Covered Roof"
+    ],
+    "contactPhone": "",
+    "contactName": "",
+    "instructions": "",
+    "isActive": true,
+    "createdAt": "2026-10-22T15:17:45.641Z",
+    "updatedAt": "2026-10-22T15:17:45.641Z"
+  }
+]
