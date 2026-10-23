@@ -19,7 +19,12 @@ const getSecret = () => process.env.JWT_SECRET || 'parkshare-fallback-secret-202
 
 const sign = (u) =>
   jwt.sign(
-    { id: String(u._id || u.id), role: u.role, name: u.name },
+    {
+      id: String(u._id || u.id),
+      email: (u.email || '').toLowerCase().trim(),
+      role: u.role,
+      name: u.name,
+    },
     getSecret(),
     { expiresIn: '7d' }
   );
@@ -39,6 +44,8 @@ const publicUser = (u) => ({
   city: u.city || '',
   address: u.address || '',
   vehicleNumber: u.vehicleNumber || '',
+  firebaseUid: u.firebaseUid || '',
+  photoUrl: u.photoUrl || '',
 });
 
 router.post('/register', async (req, res) => {
@@ -52,6 +59,7 @@ router.post('/register', async (req, res) => {
     aadhaarNumber = '',
     licenceNumber = '',
     vehicleNumber = '',
+    firebaseUid = '',
   } = req.body;
   const email = (req.body.email || '').toLowerCase().trim();
 
@@ -76,10 +84,11 @@ router.post('/register', async (req, res) => {
     licenceNumber: (licenceNumber || '').trim(),
     licencePhotoUrl: '',
     vehicleNumber: (vehicleNumber || '').trim().toUpperCase(),
+    firebaseUid: (firebaseUid || '').trim(),
     isVerified: Boolean(aadhaarNumber && licenceNumber),
   };
 
-  // 1. If MongoDB is connected, also persist to MongoDB
+  // 1. If MongoDB is connected, persist profile to MongoDB database 'parkshare'
   if (mongoose.connection.readyState === 1) {
     try {
       if (await User.exists({ email })) {
@@ -99,6 +108,7 @@ router.post('/register', async (req, res) => {
         licenceNumber: newUser.licenceNumber,
         licencePhotoUrl: newUser.licencePhotoUrl,
         vehicleNumber: newUser.vehicleNumber,
+        firebaseUid: newUser.firebaseUid,
         isVerified: newUser.isVerified,
       });
       newUser._id = String(dbUser._id);
@@ -219,7 +229,7 @@ router.post('/login', async (req, res) => {
 
 // Google OAuth exchange / registration
 router.post('/google', async (req, res) => {
-  const { email, name, role, photoUrl } = req.body;
+  const { email, name, role, photoUrl, uid } = req.body;
   const cleanEmail = (email || '').toLowerCase().trim();
   const assignedRole = role === 'host' ? 'host' : 'driver';
 
@@ -229,6 +239,7 @@ router.post('/google', async (req, res) => {
     email: cleanEmail || 'google_user@nammaspot.com',
     role: assignedRole,
     photoUrl: photoUrl || null,
+    firebaseUid: uid || '',
   };
 
   if (mongoose.connection.readyState === 1) {
@@ -239,8 +250,13 @@ router.post('/google', async (req, res) => {
           name: userObj.name,
           email: cleanEmail,
           role: assignedRole,
+          photoUrl: userObj.photoUrl,
+          firebaseUid: userObj.firebaseUid,
           passwordHash: await bcrypt.hash('google-oauth-' + Date.now(), 10),
         });
+      } else if (uid && !dbUser.firebaseUid) {
+        dbUser.firebaseUid = uid;
+        await dbUser.save();
       }
       return res.json({ token: sign(dbUser), user: publicUser(dbUser) });
     } catch (e) {
@@ -256,18 +272,31 @@ router.post('/google', async (req, res) => {
 // Get current user profile (including KYC verification details)
 router.get('/me', requireAuth, async (req, res) => {
   const userId = req.user.id;
+  const lookupEmail = (req.user.email || '').toLowerCase().trim();
 
   if (mongoose.connection.readyState === 1) {
     try {
-      const dbUser = await User.findById(userId);
-      if (dbUser) return res.json(publicUser(dbUser));
+      const queryList = [];
+      if (mongoose.isValidObjectId(userId)) {
+        queryList.push({ _id: userId });
+      }
+      if (lookupEmail) {
+        queryList.push({ email: lookupEmail });
+      }
+      if (queryList.length > 0) {
+        const dbUser = await User.findOne({ $or: queryList });
+        if (dbUser) return res.json(publicUser(dbUser));
+      }
     } catch (e) {
       console.warn('MongoDB /me notice:', e.message);
     }
   }
 
   for (const user of fallbackUsers.values()) {
-    if (String(user._id || user.id) === String(userId)) {
+    if (
+      String(user._id || user.id) === String(userId) ||
+      (lookupEmail && (user.email || '').toLowerCase() === lookupEmail)
+    ) {
       return res.json(publicUser(user));
     }
   }
@@ -280,6 +309,9 @@ router.get('/me', requireAuth, async (req, res) => {
 // Update profile, contact details, Aadhaar & Driving Licence
 router.patch('/profile', requireAuth, async (req, res) => {
   const userId = req.user.id;
+  const lookupEmail = (req.body.email || req.user?.email || '').toLowerCase().trim();
+  const firebaseUid = req.body.firebaseUid || req.user?.firebaseUid || '';
+
   const {
     name,
     phone,
@@ -290,6 +322,7 @@ router.patch('/profile', requireAuth, async (req, res) => {
     licencePhotoUrl,
     city,
     address,
+    vehicleNumber,
   } = req.body;
 
   const isVerified = Boolean(
@@ -307,26 +340,50 @@ router.patch('/profile', requireAuth, async (req, res) => {
   if (licencePhotoUrl !== undefined) updates.licencePhotoUrl = licencePhotoUrl;
   if (city !== undefined) updates.city = city.trim();
   if (address !== undefined) updates.address = address.trim();
+  if (vehicleNumber !== undefined) updates.vehicleNumber = vehicleNumber.trim().toUpperCase();
+  if (firebaseUid) updates.firebaseUid = firebaseUid;
   updates.isVerified = isVerified;
 
+  // 1. Primary: Save profile details in MongoDB database 'parkshare'
   if (mongoose.connection.readyState === 1) {
     try {
-      const dbUser = await User.findByIdAndUpdate(userId, updates, { new: true });
-      if (dbUser) {
-        fileDb.saveUser(dbUser.toObject ? dbUser.toObject() : dbUser);
-        return res.json(publicUser(dbUser));
+      const queryList = [];
+      if (mongoose.isValidObjectId(userId)) {
+        queryList.push({ _id: userId });
+      }
+      if (lookupEmail) {
+        queryList.push({ email: lookupEmail });
+      }
+      if (firebaseUid) {
+        queryList.push({ firebaseUid });
+      }
+
+      if (queryList.length > 0) {
+        const dbUser = await User.findOneAndUpdate(
+          { $or: queryList },
+          { $set: updates },
+          { new: true }
+        );
+        if (dbUser) {
+          fileDb.saveUser(dbUser.toObject ? dbUser.toObject() : dbUser);
+          console.log(`✓ Profile details for ${dbUser.email} saved in db parkshare (MongoDB)`);
+          return res.json(publicUser(dbUser));
+        }
       }
     } catch (e) {
       console.warn('MongoDB /profile update notice:', e.message);
     }
   }
 
-  // Look up user by ID in fallbackUsers or fileDb
+  // 2. Secondary fallback disk database
   let targetUser = null;
   let targetEmail = null;
 
   for (const [email, user] of fallbackUsers.entries()) {
-    if (String(user._id || user.id) === String(userId)) {
+    if (
+      String(user._id || user.id) === String(userId) ||
+      (lookupEmail && email === lookupEmail)
+    ) {
       targetUser = user;
       targetEmail = email;
       break;
@@ -334,7 +391,7 @@ router.patch('/profile', requireAuth, async (req, res) => {
   }
 
   if (!targetUser) {
-    targetUser = fileDb.getUserById(userId);
+    targetUser = (lookupEmail && fileDb.getUserByEmail(lookupEmail)) || fileDb.getUserById(userId);
     if (targetUser) {
       targetEmail = (targetUser.email || '').toLowerCase().trim();
     }
@@ -346,6 +403,7 @@ router.patch('/profile', requireAuth, async (req, res) => {
       fallbackUsers.set(targetEmail, updated);
     }
     fileDb.saveUser(updated);
+    console.log(`✓ Profile details for ${targetUser.email} saved in local disk DB`);
     return res.json(publicUser(updated));
   }
 

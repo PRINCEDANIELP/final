@@ -1,4 +1,13 @@
 import 'dotenv/config';
+import dns from 'node:dns';
+
+// Configure resilient DNS resolution for MongoDB Atlas SRV lookups on Windows
+try {
+  dns.setServers(['8.8.8.8', '1.1.1.1']);
+} catch (dnsErr) {
+  console.warn('DNS server config notice:', dnsErr.message);
+}
+
 import express from 'express';
 import cors from 'cors';
 import mongoose from 'mongoose';
@@ -108,12 +117,13 @@ connectDB()
       const localUsers = fileDb.getAllUsers();
       for (const u of localUsers) {
         if (!u.email) continue;
-        const exists = await User.findOne({ email: u.email.toLowerCase().trim() });
+        const cleanEmail = u.email.toLowerCase().trim();
+        const exists = await User.findOne({ email: cleanEmail });
         if (!exists) {
           await User.create({
-            name: u.name,
-            email: u.email.toLowerCase().trim(),
-            passwordHash: u.passwordHash,
+            name: u.name || 'User',
+            email: cleanEmail,
+            passwordHash: u.passwordHash || 'fallback-hash',
             role: u.role || 'driver',
             phone: u.phone || '',
             aadhaarNumber: u.aadhaarNumber || '',
@@ -121,10 +131,30 @@ connectDB()
             licenceName: u.licenceName || '',
             licenceNumber: u.licenceNumber || '',
             licencePhotoUrl: u.licencePhotoUrl || '',
-            isVerified: Boolean(u.isVerified),
+            isVerified: Boolean(u.isVerified || (u.aadhaarNumber && u.licenceNumber)),
             city: u.city || '',
             address: u.address || '',
+            vehicleNumber: u.vehicleNumber || '',
+            firebaseUid: u.firebaseUid || '',
           });
+        } else {
+          // If user exists in MongoDB parkshare db, backfill any empty profile fields
+          const profileUpdates = {};
+          if (!exists.phone && u.phone) profileUpdates.phone = u.phone;
+          if (!exists.aadhaarNumber && u.aadhaarNumber) profileUpdates.aadhaarNumber = u.aadhaarNumber;
+          if (!exists.aadhaarPhotoUrl && u.aadhaarPhotoUrl) profileUpdates.aadhaarPhotoUrl = u.aadhaarPhotoUrl;
+          if (!exists.licenceName && u.licenceName) profileUpdates.licenceName = u.licenceName;
+          if (!exists.licenceNumber && u.licenceNumber) profileUpdates.licenceNumber = u.licenceNumber;
+          if (!exists.licencePhotoUrl && u.licencePhotoUrl) profileUpdates.licencePhotoUrl = u.licencePhotoUrl;
+          if (!exists.city && u.city) profileUpdates.city = u.city;
+          if (!exists.address && u.address) profileUpdates.address = u.address;
+          if (!exists.vehicleNumber && u.vehicleNumber) profileUpdates.vehicleNumber = u.vehicleNumber;
+          if (!exists.isVerified && (u.isVerified || (u.aadhaarNumber && u.licenceNumber))) {
+            profileUpdates.isVerified = true;
+          }
+          if (Object.keys(profileUpdates).length > 0) {
+            await User.updateOne({ email: cleanEmail }, { $set: profileUpdates });
+          }
         }
       }
       const localSpots = fileDb.getAllSpots();

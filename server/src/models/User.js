@@ -16,6 +16,8 @@ const userSchema = new mongoose.Schema(
     city: { type: String, default: '' },
     address: { type: String, default: '' },
     vehicleNumber: { type: String, default: '' },
+    firebaseUid: { type: String, default: '' },
+    photoUrl: { type: String, default: '' },
   },
   { timestamps: true }
 );

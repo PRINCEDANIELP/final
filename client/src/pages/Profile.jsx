@@ -75,6 +75,7 @@ export default function Profile() {
     licenceName: '',
     licenceNumber: '',
     licencePhotoUrl: '',
+    vehicleNumber: '',
     isVerified: false,
   });
 
@@ -108,6 +109,7 @@ export default function Profile() {
           licenceName: merged.licenceName || merged.name || '',
           licenceNumber: merged.licenceNumber || '',
           licencePhotoUrl: merged.licencePhotoUrl || '',
+          vehicleNumber: merged.vehicleNumber || '',
           isVerified: Boolean(
             merged.isVerified && merged.aadhaarNumber && merged.licenceNumber
           ),
@@ -214,6 +216,7 @@ export default function Profile() {
 
       const payload = {
         name: form.name.trim(),
+        email: form.email || currentUser?.email || '',
         phone: form.phone.trim(),
         city: form.city.trim(),
         address: form.address.trim(),
@@ -222,6 +225,8 @@ export default function Profile() {
         licenceName: form.licenceName.trim(),
         licenceNumber: form.licenceNumber.trim(),
         licencePhotoUrl: form.licencePhotoUrl,
+        vehicleNumber: (form.vehicleNumber || currentUser?.vehicleNumber || '').trim().toUpperCase(),
+        firebaseUid: currentUser?.firebaseUid || '',
       };
 
       const updated = await api('/auth/profile', {

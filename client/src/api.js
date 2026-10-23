@@ -605,6 +605,24 @@ function generateLocalSpotsAround(lat, lng) {
       ),
     };
     localStorage.setItem('user', JSON.stringify(updated));
+
+    // Also update in persistent parkshare_users mock registry
+    try {
+      const users = getStored('parkshare_users', []);
+      const userEmail = (updated.email || '').toLowerCase().trim();
+      const idx = users.findIndex(
+        (u) =>
+          (u.email && u.email.toLowerCase().trim() === userEmail) ||
+          String(u.id || u._id) === String(updated.id || updated._id)
+      );
+      if (idx >= 0) {
+        users[idx] = { ...users[idx], ...updated };
+      } else {
+        users.push(updated);
+      }
+      setStored('parkshare_users', users);
+    } catch {}
+
     return updated;
   }
 
